@@ -1757,6 +1757,7 @@ function saEnsureWalletShape(w){
     if (!Array.isArray(w.archivedTransactions)) w.archivedTransactions = [];
     if (!Array.isArray(w.ekycHistoryArchive)) w.ekycHistoryArchive = [];
     if (!Array.isArray(w.historyEpochs)) w.historyEpochs = [];
+    if (!Array.isArray(w.setupArchive)) w.setupArchive = [];
     if (w.reopenApprovedAt === undefined) w.reopenApprovedAt = null;
     // Super-Admin-only Freeze: puts every transaction on hold. statusBeforeFreeze remembers
     // what to restore to when the Super Admin unfreezes it.
@@ -1976,6 +1977,7 @@ function saApproveWalletReopen(adminId){
         reopenRequestLog: old.reopenRequestLog || [],
         archivedTransactions: (old.archivedTransactions || []).concat(old.transactions || []),
         chargeRequests: old.chargeRequests || [],
+        setupArchive: (old.setupArchive || []).concat(old.setup && (old.setup.done || old.setup.details || (old.setup.videoEkyc && (old.setup.videoEkyc.attempts || []).length)) ? [old.setup] : []),
         lockHistory: lockHistory,
         ekycHistoryArchive: (old.ekycHistoryArchive || []).concat((old.ekycRequest && old.ekycRequest.history) || []),
         historyEpochs: (old.historyEpochs || []).concat([nowIso])
@@ -3902,11 +3904,7 @@ function saDownloadEkycVerificationSheet(){
 // First-Time Wallet Setup / AI Video eKYC status — read-only view for the Super Admin.
 // This flow is owner-initiated on the Admin dashboard, so the Super Admin can only
 // observe its status here (not force or bypass it).
-function saRenderFirstSetupPanel(wallet){
-    const body = document.getElementById('sa-wallet-firstsetup-body');
-    if (!body) return;
-    if (wallet.status === 'closed') { body.innerHTML = ''; return; }
-    const setup = wallet.setup || { done:false, details:null, videoEkyc:{ status:'not_started' } };
+function saFirstSetupHtml(wallet, setup){
     const ve = setup.videoEkyc || { status:'not_started' };
     let html = '';
     if (setup.done) {
@@ -3925,6 +3923,20 @@ function saRenderFirstSetupPanel(wallet){
             '</div>';
     }
     html += saRenderEkycAttemptsList(Array.isArray(ve.attempts) ? ve.attempts : []);
+    return html;
+}
+function saRenderFirstSetupPanel(wallet){
+    const body = document.getElementById('sa-wallet-firstsetup-body');
+    if (!body) return;
+    const cur = wallet.setup || { done:false, details:null, videoEkyc:{ status:'not_started' } };
+    const curAttempts = (cur.videoEkyc && cur.videoEkyc.attempts) || [];
+    const hasCur = !(wallet.status === 'closed' && !cur.done && !curAttempts.length && !cur.details);
+    let html = hasCur ? saFirstSetupHtml(wallet, cur) : '';
+    const arch = (wallet.setupArchive || []).slice().reverse();
+    arch.forEach(function(old, i){
+        html += '<div class="wallet-epoch-divider"><span>&#128260; Earlier setup &amp; Video eKYC history (before wallet closure)</span></div>' + saFirstSetupHtml(wallet, old);
+    });
+    if (!html) html = '<div style="font-size:0.75rem;color:#78350f;">No setup history yet.</div>';
     body.innerHTML = html;
 }
 
