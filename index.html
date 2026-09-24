@@ -1955,9 +1955,22 @@ function saUnfreezeWallet(adminId){
 }
 // ===== eKYC — only ever initiated by the Super Admin "forcing" a request. The Admin dashboard
 // never shows the verification button unless a request is pending/in-cooldown here. =====
+// Why a Force eKYC Request can't be sent right now ('' = allowed).
+function saForceEkycBlockReason(wallet){
+    if (wallet.status === 'closed') return 'Force eKYC is unavailable while the wallet is permanently closed. It unlocks once the wallet is reopened.';
+    if (!(wallet.setup && wallet.setup.done)) return 'Force eKYC can be sent only after the Admin completes the first Video eKYC.';
+    const ek = wallet.ekycRequest;
+    if (ek && ek.status === 'cooldown' && ek.nextAttemptAt && new Date() < new Date(ek.nextAttemptAt)) {
+        return 'The last eKYC attempt failed. A new Force eKYC Request can be sent after ' + saFmtWalletDate(ek.nextAttemptAt) + ' (24 hours from the failure).';
+    }
+    if (ek && ek.status === 'pending') return 'A Force eKYC request is already pending. Waiting for the Admin to complete it.';
+    return '';
+}
 function saForceEkycRequest(adminId){
     const data = saReadLibrary(adminId) || {};
     const wallet = saEnsureWalletShape(data.wallet);
+    const _blk = saForceEkycBlockReason(wallet);
+    if (_blk) throw new Error(_blk);
     wallet.ekycRequest = {
         status: 'pending', forcedAt: new Date().toISOString(),
         nextAttemptAt: null, verifiedAt: null, history: (wallet.ekycRequest && wallet.ekycRequest.history) || []
@@ -3713,9 +3726,10 @@ function saRenderEkycPanel(wallet){
         '<button style="width:100%;background:#7c3aed;color:#fff;border:none;padding:11px;border-radius:10px;font-weight:800;font-size:0.8rem;cursor:pointer;margin-top:8px;" onclick="saOpenEkycForceModal()">📇 Force eKYC Request</button>' +
         '<button style="width:100%;background:#fff;color:#7c3aed;border:1.5px solid #7c3aed;padding:10px;border-radius:10px;font-weight:800;font-size:0.78rem;cursor:pointer;margin-top:8px;" onclick="saDownloadEkycVerificationSheet()">⬇️ Download eKYC Verification Sheet</button>' +
         sheetInfoHtml;
-    if (wallet.status === 'closed') {
+    const _blockMsg = saForceEkycBlockReason(wallet);
+    if (_blockMsg) {
         const fb = body.querySelector('button[onclick*="saOpenEkycForceModal"]');
-        if (fb) { fb.disabled = true; fb.style.opacity = '.45'; fb.style.cursor = 'not-allowed'; fb.removeAttribute('onclick'); fb.insertAdjacentHTML('afterend', '<p style="font-size:0.7rem;color:#dc2626;margin:6px 2px 0;font-weight:700;">Force eKYC is unavailable while the wallet is permanently closed. It unlocks once the wallet is reopened.</p>'); }
+        if (fb) { fb.disabled = true; fb.style.opacity = '.45'; fb.style.cursor = 'not-allowed'; fb.removeAttribute('onclick'); fb.insertAdjacentHTML('afterend', '<p style="font-size:0.7rem;color:#dc2626;margin:6px 2px 0;font-weight:700;">' + _blockMsg + '</p>'); }
     }
 }
 // Renders a compact, most-recent-first breakdown of every attempt in a Video eKYC
@@ -3756,7 +3770,8 @@ function saOpenEkycForceModal(){ if (_saWalletAdminId) document.getElementById('
 function saCloseEkycForceModal(){ document.getElementById('sa-ekyc-modal').style.display = 'none'; }
 function saConfirmEkycForceModal(){
     if (!_saWalletAdminId) return;
-    saForceEkycRequest(_saWalletAdminId);
+    try { saForceEkycRequest(_saWalletAdminId); }
+    catch (e) { saCloseEkycForceModal(); alert(e.message); renderSaWalletModal(); return; }
     saCloseEkycForceModal();
     renderSaWalletModal();
     alert('📇 eKYC request sent. The Admin will now see the verification button on their Wallet screen.');
