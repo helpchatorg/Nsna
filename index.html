@@ -1977,6 +1977,7 @@ function saApproveWalletReopen(adminId){
         reopenRequestLog: old.reopenRequestLog || [],
         archivedTransactions: (old.archivedTransactions || []).concat(old.transactions || []),
         chargeRequests: old.chargeRequests || [],
+        ekycSheetLastDownloadedAt: old.ekycSheetLastDownloadedAt || null,
         setupArchive: (old.setupArchive || []).concat(old.setup && (old.setup.done || old.setup.details || (old.setup.videoEkyc && (old.setup.videoEkyc.attempts || []).length)) ? [old.setup] : []),
         lockHistory: lockHistory,
         ekycHistoryArchive: (old.ekycHistoryArchive || []).concat((old.ekycRequest && old.ekycRequest.history) || []),
@@ -3686,7 +3687,10 @@ function saRenderEkycPanel(wallet){
     }
     // Full audit trail: every Re-Verification attempt, exactly what was asked, what
     // matched/didn't, and — if it auto-failed from the live camera checks — why.
-    const historyHtml = saRenderEkycAttemptsList((ek && ek.history) || []);
+    let historyHtml = saRenderEkycAttemptsList((ek && ek.history) || []);
+    if ((wallet.ekycHistoryArchive || []).length) {
+        historyHtml += '<div class="wallet-epoch-divider"><span>&#128260; Earlier eKYC history (before wallet closure)</span></div>' + saRenderEkycAttemptsList(wallet.ekycHistoryArchive);
+    }
     const sheetInfoHtml = '<div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.74rem;color:var(--grey);margin-top:8px;">📄 ' +
         (wallet.ekycSheetLastDownloadedAt
             ? ('eKYC Verification Sheet last downloaded on <strong>' + saFmtWalletDate(wallet.ekycSheetLastDownloadedAt) + '</strong>.')
