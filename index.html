@@ -1828,6 +1828,9 @@ function saAddWalletFunds(adminId, amount, note){
     if (wallet.status !== 'active') {
         throw new Error('Funds can only be added while the wallet is Active.');
     }
+    if (!(wallet.setup && wallet.setup.done)) {
+        throw new Error('Funds can be added only after the Admin completes the first Video eKYC.');
+    }
     const projected = (wallet.balance || 0) + amount;
     if (projected > WALLET_MAX_BALANCE) {
         throw new Error('This would put the wallet balance at ₹' + projected + ', which is above the ₹' + WALLET_MAX_BALANCE.toLocaleString('en-IN') + ' wallet limit. Reduce the amount and try again.');
@@ -3544,8 +3547,13 @@ function renderSaWalletLifecyclePanel(wallet){
     const addFunds = document.getElementById('sa-wallet-addfunds-panel');
     if (!panel) return;
     if (wallet.status === 'active') {
-        panel.innerHTML = '';
-        if (addFunds) addFunds.style.display = '';
+        const setupDone = !!(wallet.setup && wallet.setup.done);
+        panel.innerHTML = setupDone ? '' : '<div class="sa-wallet-info-panel closing"><div class="sa-wallet-info-head">&#9203; Video eKYC Pending</div><p>Funds can be added only after the Admin completes the first Video eKYC.</p></div>';
+        if (addFunds) {
+            addFunds.style.display = '';
+            addFunds.style.opacity = setupDone ? '' : '.45';
+            addFunds.querySelectorAll('input,button').forEach(function(el){ el.disabled = !setupDone; el.style.cursor = setupDone ? '' : 'not-allowed'; });
+        }
     } else if (wallet.status === 'deactivated') {
         panel.innerHTML = '<div class="sa-wallet-info-panel deactivated"><div class="sa-wallet-info-head">⏸ Wallet Deactivated</div><p>This wallet has been deactivated by the Admin and can\'t be funded or used until they reactivate it from their side.</p></div>';
         if (addFunds) addFunds.style.display = 'none';
