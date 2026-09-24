@@ -1758,6 +1758,7 @@ function saEnsureWalletShape(w){
     if (!Array.isArray(w.ekycHistoryArchive)) w.ekycHistoryArchive = [];
     if (!Array.isArray(w.historyEpochs)) w.historyEpochs = [];
     if (!Array.isArray(w.setupArchive)) w.setupArchive = [];
+    if (!Array.isArray(w.ekycSheetDownloadLog)) w.ekycSheetDownloadLog = (w.ekycSheetLastDownloadedAt ? [{ date: w.ekycSheetLastDownloadedAt, by: 'Super Admin' }] : []);
     if (w.reopenApprovedAt === undefined) w.reopenApprovedAt = null;
     // Super-Admin-only Freeze: puts every transaction on hold. statusBeforeFreeze remembers
     // what to restore to when the Super Admin unfreezes it.
@@ -1978,6 +1979,7 @@ function saApproveWalletReopen(adminId){
         archivedTransactions: (old.archivedTransactions || []).concat(old.transactions || []),
         chargeRequests: old.chargeRequests || [],
         ekycSheetLastDownloadedAt: old.ekycSheetLastDownloadedAt || null,
+        ekycSheetDownloadLog: old.ekycSheetDownloadLog || [],
         setupArchive: (old.setupArchive || []).concat(old.setup && (old.setup.done || old.setup.details || (old.setup.videoEkyc && (old.setup.videoEkyc.attempts || []).length)) ? [old.setup] : []),
         lockHistory: lockHistory,
         ekycHistoryArchive: (old.ekycHistoryArchive || []).concat((old.ekycRequest && old.ekycRequest.history) || []),
@@ -3694,7 +3696,11 @@ function saRenderEkycPanel(wallet){
     const sheetInfoHtml = '<div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.74rem;color:var(--grey);margin-top:8px;">📄 ' +
         (wallet.ekycSheetLastDownloadedAt
             ? ('eKYC Verification Sheet last downloaded on <strong>' + saFmtWalletDate(wallet.ekycSheetLastDownloadedAt) + '</strong>.')
-            : 'eKYC Verification Sheet has not been downloaded yet.') + '</div>';
+            : 'eKYC Verification Sheet has not been downloaded yet.') +
+        ((wallet.ekycSheetDownloadLog || []).length > 1 || (wallet.historyEpochs || []).length
+            ? ('<div style="margin-top:6px;border-top:1px dashed var(--border);padding-top:6px;"><strong>Download history</strong>' +
+               saWithEpochDividers(wallet, (wallet.ekycSheetDownloadLog || []).slice().reverse(), function(d){ return '<div style="padding:2px 0;">&#128196; ' + saFmtWalletDate(d.date) + '</div>'; }) + '</div>')
+            : '') + '</div>';
     body.innerHTML = statusHtml + historyHtml +
         '<button style="width:100%;background:#7c3aed;color:#fff;border:none;padding:11px;border-radius:10px;font-weight:800;font-size:0.8rem;cursor:pointer;margin-top:8px;" onclick="saOpenEkycForceModal()">📇 Force eKYC Request</button>' +
         '<button style="width:100%;background:#fff;color:#7c3aed;border:1.5px solid #7c3aed;padding:10px;border-radius:10px;font-weight:800;font-size:0.78rem;cursor:pointer;margin-top:8px;" onclick="saDownloadEkycVerificationSheet()">⬇️ Download eKYC Verification Sheet</button>' +
@@ -3900,6 +3906,7 @@ function saDownloadEkycVerificationSheet(){
         const dataToSave = saReadLibrary(_saWalletAdminId) || {};
         const walletToSave = saEnsureWalletShape(dataToSave.wallet);
         walletToSave.ekycSheetLastDownloadedAt = new Date().toISOString();
+        walletToSave.ekycSheetDownloadLog = (walletToSave.ekycSheetDownloadLog || []).concat([{ date: walletToSave.ekycSheetLastDownloadedAt, by: 'Super Admin' }]);
         dataToSave.wallet = walletToSave;
         saWriteLibrary(_saWalletAdminId, dataToSave);
         saRenderEkycPanel(walletToSave); // refresh the panel so the new "last downloaded" line shows immediately
